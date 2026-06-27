@@ -1,8 +1,8 @@
 ---
-title: Canvas Discussion: Equations
+title: "Canvas Discussion: Equations"
 emoji: 📐
 colorFrom: blue
-colorTo: teal
+colorTo: green
 sdk: gradio
 app_file: app.py
 pinned: false
