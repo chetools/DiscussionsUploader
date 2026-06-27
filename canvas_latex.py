@@ -15,16 +15,17 @@ def _encoded_src(latex: str) -> str:
     return urllib.parse.quote(once, safe="()&")
 
 
+def _equation_line(label: str, latex: str) -> str:
+    img = to_canvas_html(latex, inline=True, vertical_align_top=True)
+    return (
+        f'<p style="text-align:left;">'
+        f"<strong>({label})</strong>&nbsp;&nbsp;{img}</p>"
+    )
+
+
 def build_discussion_message(equations: list[tuple[str, str]]) -> str:
     """Build one discussion body from (display_label, latex) pairs."""
-    parts: list[str] = []
-    for label, latex in equations:
-        img = to_canvas_html(latex, inline=True, vertical_align_top=True)
-        parts.append(
-            f'<p style="text-align:left;">'
-            f"<strong>({label})</strong>&nbsp;&nbsp;{img}</p>"
-        )
-    return "".join(parts)
+    return "".join(_equation_line(label, latex) for label, latex in equations)
 
 
 def to_canvas_html(

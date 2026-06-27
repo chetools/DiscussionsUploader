@@ -10,12 +10,12 @@ pinned: false
 
 # Canvas Discussion: Equations
 
-Upload numbered equations from a PDF into Canvas as an **unpublished discussion draft** — ready for teachers at [UC Canvas](https://uc.instructure.com/).
+Upload numbered equations from a **PDF** or **Markdown** file into Canvas as an **unpublished discussion draft** — ready for teachers at [UC Canvas](https://uc.instructure.com/).
 
 ## How to use
 
 1. **Connect** — Paste your Canvas API token and test the connection.
-2. **Upload PDF** — Provide a PDF with numbered labels like `(1)`, `(3b)`, or `(5-1)`.
+2. **Upload file** — Provide a PDF with numbered labels like `(1)`, `(3b)`, or `(5-1)`, or a Markdown file with display equations tagged `\tag{1}`, `\tag{3b}`, etc. Only numbered equations are uploaded; prose is stripped. `\boxed{...}` and `\fbox{...}` are removed automatically.
 3. **Review & save** — Choose a course, preview the equations, and save an unpublished draft to Canvas.
 
 ## Getting a Canvas token

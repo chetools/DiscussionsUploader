@@ -81,6 +81,29 @@ def renumber_label(sequence: int, suffix: str) -> str:
     return f"{sequence}{suffix}"
 
 
+def strip_latex_boxes(latex: str) -> str:
+    """Remove \\boxed{...} and \\fbox{...} wrappers, preserving inner content."""
+    for command in (r"\boxed{", r"\fbox{"):
+        while True:
+            idx = latex.find(command)
+            if idx == -1:
+                break
+            start = idx + len(command)
+            depth = 1
+            pos = start
+            while pos < len(latex) and depth > 0:
+                if latex[pos] == "{":
+                    depth += 1
+                elif latex[pos] == "}":
+                    depth -= 1
+                pos += 1
+            if depth != 0:
+                break
+            inner = latex[start : pos - 1]
+            latex = latex[:idx] + inner + latex[pos:]
+    return latex.strip()
+
+
 def _get_ocr_model():
     global _ocr_model
     if _ocr_model is None:
@@ -140,7 +163,7 @@ def _normalize_to_latex(text: str) -> str:
     cleaned = re.sub(r"\\Leftarrow\\Rightarrow", r"\\Leftrightarrow ", cleaned)
     cleaned = re.sub(r"\\dot([a-z])", r"\\dot{\1}", cleaned)
     cleaned = re.sub(r"\bv\^2 2\b", r"\\frac{v^2}{2}", cleaned)
-    return cleaned
+    return strip_latex_boxes(cleaned)
 
 
 def _parse_label_line(text: str) -> tuple[str, int, str] | None:
