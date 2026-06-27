@@ -7,10 +7,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from canvasapi import Canvas
+from canvasapi.exceptions import CanvasException, Unauthorized
 from dotenv import load_dotenv
 
 load_dotenv()
 
+CANVAS_BASE_URL = "https://uc.instructure.com"
 TWO_YEARS_DAYS = 730
 
 
@@ -26,14 +28,46 @@ class UploadResult:
     success: bool
     detail: str
     discussion_id: int | None = None
+    course_id: int | None = None
 
 
-def _client() -> Canvas:
-    url = os.environ.get("CANVAS_API_URL", "").rstrip("/")
-    key = os.environ.get("CANVAS_API_KEY", "")
-    if not url or not key:
-        raise RuntimeError("Set CANVAS_API_URL and CANVAS_API_KEY in .env")
+def friendly_canvas_error(exc: Exception) -> str:
+    if isinstance(exc, Unauthorized):
+        return (
+            "Canvas didn't accept that token. Open Canvas → Account → Settings → "
+            "Approved Integrations, generate a new access token, and try again."
+        )
+    if isinstance(exc, CanvasException):
+        msg = str(exc).strip()
+        if "401" in msg or "unauthorized" in msg.lower():
+            return (
+                "Canvas didn't accept that token. Generate a new access token "
+                "in your Canvas account settings and try again."
+            )
+        if "403" in msg or "forbidden" in msg.lower():
+            return "Canvas denied access. Make sure your token is still active and you are enrolled as a teacher."
+        return f"Canvas returned an error: {msg}"
+    if isinstance(exc, RuntimeError):
+        return str(exc)
+    return f"Something went wrong while contacting Canvas: {exc}"
+
+
+def _resolve_api_key(api_key: str | None) -> str:
+    key = (api_key or "").strip() or os.environ.get("CANVAS_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("Enter your Canvas API token in Step 1 before continuing.")
+    return key
+
+
+def _client(api_key: str | None = None) -> Canvas:
+    key = _resolve_api_key(api_key)
+    url = os.environ.get("CANVAS_API_URL", CANVAS_BASE_URL).rstrip("/")
     return Canvas(url, key)
+
+
+def discussion_url(course_id: int, discussion_id: int) -> str:
+    base = os.environ.get("CANVAS_API_URL", CANVAS_BASE_URL).rstrip("/")
+    return f"{base}/courses/{course_id}/discussion_topics/{discussion_id}"
 
 
 def _parse_canvas_date(iso_str: str | None) -> datetime | None:
@@ -50,8 +84,8 @@ def _reference_date(course) -> datetime | None:
     return None
 
 
-def list_teacher_courses(*, show_all: bool = False) -> list[CourseOption]:
-    canvas = _client()
+def list_teacher_courses(*, api_key: str | None = None, show_all: bool = False) -> list[CourseOption]:
+    canvas = _client(api_key)
     cutoff = datetime.now(timezone.utc) - timedelta(days=TWO_YEARS_DAYS)
     options: list[CourseOption] = []
     dated: list[tuple[datetime, CourseOption]] = []
@@ -73,7 +107,7 @@ def list_teacher_courses(*, show_all: bool = False) -> list[CourseOption]:
         state_tag = f" [{state}]" if state and state != "available" else ""
         option = CourseOption(
             course_id=int(course.id),
-            label=f"{code} — {name}{state_tag} (id={course.id})",
+            label=f"{code} — {name}{state_tag}",
         )
 
         if show_all:
@@ -93,21 +127,29 @@ def create_equation_discussion(
     course_id: int,
     title: str,
     message_html: str,
+    *,
+    api_key: str | None = None,
 ) -> UploadResult:
-    """Create a single discussion with all equations in the message body."""
-    canvas = _client()
+    """Create a single unpublished discussion with all equations in the message body."""
+    canvas = _client(api_key)
     course = canvas.get_course(course_id)
     try:
         topic = course.create_discussion_topic(
             title=title,
             message=message_html,
-            published=True,
+            published=False,
         )
         return UploadResult(
             title=title,
             success=True,
-            detail="Created",
+            detail="Saved as an unpublished draft in Canvas.",
             discussion_id=int(topic.id),
+            course_id=course_id,
         )
     except Exception as exc:
-        return UploadResult(title=title, success=False, detail=str(exc))
+        return UploadResult(
+            title=title,
+            success=False,
+            detail=friendly_canvas_error(exc),
+            course_id=course_id,
+        )
