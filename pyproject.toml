@@ -1,0 +1,11 @@
+[project]
+name = "discussions-uploader"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "canvasapi",
+    "gradio",
+    "pymupdf",
+    "pix2tex",
+    "python-dotenv",
+]
