@@ -1,6 +1,6 @@
 ---
 name: canvas-equation-discussion
-description: Extract numbered equations from a PDF or Markdown file and create an unpublished Canvas discussion draft. Use when the user wants to turn an equation sheet / derivation PDF or Markdown (.md) into a Canvas "Discussion: Equations" draft, list their Canvas teacher courses, or preview which equations would upload.
+description: Extract numbered equations from a PDF, a Markdown file, or the current Claude Code conversation and create an unpublished Canvas discussion draft. Use when the user wants to turn an equation sheet / derivation PDF or Markdown (.md) — or the equations that came up in this chat/session — into a Canvas "Discussion: Equations" draft, list their Canvas teacher courses, or preview which equations would upload.
 ---
 
 # Canvas Equation Discussion
@@ -48,7 +48,42 @@ uv run "$SKILL" upload path/to/file.pdf --course-id 12345 \
     --title "Choked Flow Equations" --range 1-10
 ```
 
-Add `--json` to `courses`, `extract`, or `preview` for machine-readable output.
+Add `--json` to `courses`, `extract`, `preview`, or `session` for machine-readable output.
+
+## Session source (equations from this conversation)
+
+To upload the equations that came up *during the current Claude Code
+conversation* instead of from a file, use the `session` command. It scans the
+active session's transcript, collects the display-math (`$$...$$` and `\[...\]`)
+equations, dedupes and numbers them, and writes a Markdown file that the
+existing `preview`/`upload` commands consume unchanged:
+
+```bash
+# 1. Collect the conversation's equations (auto-detects the current session)
+uv run "$SKILL" session                 # writes a temp .md, prints a numbered list
+#    --transcript PATH   target a specific .jsonl conversation instead
+#    --project-dir DIR    override the Claude Code projects folder
+#    --out PATH           choose where the .md is written
+
+# 2. Show the numbered list to the user and let them pick which to keep.
+
+# 3. Preview / upload the chosen numbers via the SAME commands as files:
+uv run "$SKILL" preview <printed.md> --range 2,4,5 --title "Helmholtz Residual"
+uv run "$SKILL" upload  <printed.md> --course-id 12345 \
+    --title "Helmholtz Residual" --range 2,4,5
+```
+
+Notes for the session source:
+
+- **Selection is the `--range` from the printed list** — present the numbered
+  equations, ask the user which ones, then pass them as `--range`.
+- Only **display** math is collected (deliberate `$$...$$` / `\[...\]` blocks);
+  inline `$...$` is ignored. Blocks with no letters/digits (e.g. a bare `...`)
+  are dropped, and verbatim-restated equations are deduped to first occurrence.
+- The current session is the most-recently-modified transcript for this project.
+  If that's the wrong one, pass `--transcript` with the exact `.jsonl` path.
+- A `$$...$$` shown inside a fenced code example in chat can be captured too —
+  the user curates that out via `--range`.
 
 ## Recommended sequence
 

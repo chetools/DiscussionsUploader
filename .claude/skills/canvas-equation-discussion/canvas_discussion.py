@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 # This skill is self-contained: the modules it imports are vendored alongside
@@ -42,6 +43,11 @@ from canvas_client import (  # noqa: E402
 from canvas_latex import build_discussion_message  # noqa: E402
 from content import extract_from_file  # noqa: E402
 from pdf_equations import parse_equation_range, renumber_label  # noqa: E402
+from session_equations import (  # noqa: E402
+    discover_transcript,
+    extract_session_equations,
+    write_session_markdown,
+)
 
 
 def _fail(message: str) -> int:
@@ -118,6 +124,55 @@ def cmd_extract(args: argparse.Namespace) -> int:
     print(f"Found {len(result.equations)} equation(s) from {kind}:")
     for eq in result.equations:
         print(f"  ({eq.label}) [{location} {eq.page}]  {eq.latex}")
+    return 0
+
+
+def cmd_session(args: argparse.Namespace) -> int:
+    try:
+        transcript = Path(args.transcript) if args.transcript else discover_transcript(
+            project_dir=args.project_dir
+        )
+    except FileNotFoundError as exc:
+        return _fail(str(exc))
+
+    if not transcript.is_file():
+        return _fail(f"Transcript not found: {transcript}")
+
+    try:
+        equations = extract_session_equations(transcript)
+    except Exception as exc:
+        return _fail(f"Could not read that transcript: {exc}")
+
+    if not equations:
+        print(
+            "No $$...$$ display equations found in this conversation. "
+            "Only display-math blocks (not inline $...$) are collected."
+        )
+        return 0
+
+    out_path = Path(args.out) if args.out else Path(tempfile.gettempdir()) / "session_equations.md"
+    write_session_markdown(equations, out_path)
+    out_abs = out_path.resolve()
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "transcript": str(transcript.resolve()),
+                    "out": str(out_abs),
+                    "equations": [{"label": eq.label, "latex": eq.latex} for eq in equations],
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    print(f"Found {len(equations)} display equation(s) in {transcript.name}:")
+    for eq in equations:
+        print(f"  ({eq.label})  {eq.latex}")
+    print()
+    print(f"Wrote Markdown for the preview/upload commands: {out_abs}")
+    print(f"  Next: preview \"{out_abs}\" --range <nums> --title \"...\"")
     return 0
 
 
@@ -216,6 +271,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_extract.add_argument("file", help="Path to a .pdf or .md file.")
     p_extract.add_argument("--json", action="store_true", help="Emit JSON.")
     p_extract.set_defaults(func=cmd_extract)
+
+    p_session = sub.add_parser(
+        "session",
+        help="Collect display equations from the current Claude Code conversation.",
+    )
+    p_session.add_argument(
+        "--transcript",
+        default=None,
+        help="Path to a specific .jsonl transcript (defaults to the most recent for this project).",
+    )
+    p_session.add_argument(
+        "--project-dir",
+        default=None,
+        help="Override the Claude Code projects folder to search for the transcript.",
+    )
+    p_session.add_argument(
+        "--out",
+        default=None,
+        help="Where to write the materialized Markdown (defaults to a temp file).",
+    )
+    p_session.add_argument("--json", action="store_true", help="Emit JSON.")
+    p_session.set_defaults(func=cmd_session)
 
     p_preview = sub.add_parser("preview", help="Show the renumbered selection for a range.")
     p_preview.add_argument("file", help="Path to a .pdf or .md file.")
