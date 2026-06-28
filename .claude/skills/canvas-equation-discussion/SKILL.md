@@ -5,41 +5,46 @@ description: Extract numbered equations from a PDF or Markdown file and create a
 
 # Canvas Equation Discussion
 
-Drive the same workflow as this repo's Gradio app from the terminal: pull
-numbered equations out of a PDF or Markdown file, pick a range, and post them
-to Canvas as an **unpublished** discussion draft. The CLI reuses the project's
-own modules (`content`, `pdf_equations`, `canvas_latex`, `canvas_client`), so
-behavior matches the app exactly.
+Pull numbered equations out of a PDF or Markdown file, pick a range, and post
+them to Canvas as an **unpublished** discussion draft. This skill is
+**self-contained**: it vendors its extraction/Canvas modules (`content`,
+`pdf_equations`, `md_equations`, `canvas_latex`, `canvas_client`) alongside the
+CLI, and declares its dependencies inline (PEP 723), so it runs from any
+directory once copied into a skills folder — no repo checkout required.
 
 ## Prerequisites
 
-- A Canvas API token. The CLI reads it from `CANVAS_API_KEY` (environment
-  variable or a `.env` file in the project root, auto-loaded), or you can pass
-  `--token` to any command. Course listing and uploading require it; `extract`
+- [uv](https://docs.astral.sh/uv/) on the PATH. `uv run` installs the script's
+  dependencies (`canvasapi`, `pymupdf`, `python-dotenv`) automatically on first
+  use, into an isolated environment.
+- A Canvas API token, resolved in this order: `--token` on any command →
+  `CANVAS_API_KEY` environment variable → a `.env` file in the current working
+  directory (auto-loaded). Course listing and uploading require it; `extract`
   and `preview` do not.
 - If the user has no token, walk them through it: Canvas → **Account** →
   **Settings** → **Approved Integrations** → **+ New Access Token** →
-  **Generate Token**, then copy it into a `.env` file as
-  `CANVAS_API_KEY=...`. Tokens are shown only once.
+  **Generate Token**, then copy it into a `.env` file (in the directory you run
+  from) as `CANVAS_API_KEY=...`. Tokens are shown only once.
 
 ## Running
 
-Always run from the project root with `uv run` so dependencies resolve:
+`uv run` the script directly — it resolves its own dependencies. Use the path to
+wherever this skill folder lives (e.g. `~/.claude/skills/canvas-equation-discussion/`):
 
 ```bash
-SKILL=.claude/skills/canvas-equation-discussion/canvas_discussion.py
+SKILL=~/.claude/skills/canvas-equation-discussion/canvas_discussion.py
 
 # 1. Find the target course id
-uv run python "$SKILL" courses                 # add --show-all for older courses
+uv run "$SKILL" courses                 # add --show-all for older courses
 
 # 2. See what equations the file contains
-uv run python "$SKILL" extract path/to/file.pdf
+uv run "$SKILL" extract path/to/file.pdf
 
 # 3. Preview the selected, renumbered set (no network calls)
-uv run python "$SKILL" preview path/to/file.pdf --range 1-10 --title "Choked Flow Equations"
+uv run "$SKILL" preview path/to/file.pdf --range 1-10 --title "Choked Flow Equations"
 
 # 4. Create the unpublished draft
-uv run python "$SKILL" upload path/to/file.pdf --course-id 12345 \
+uv run "$SKILL" upload path/to/file.pdf --course-id 12345 \
     --title "Choked Flow Equations" --range 1-10
 ```
 
@@ -68,7 +73,8 @@ new labels `1,2,3b`.
   cannot publish.
 - Supported inputs: `.pdf` (labels like `(1)`, `(3b)`, `(5-1)`) and `.md`
   (display `$$...$$` blocks ending in `\tag{1}`). Prose is ignored.
-- The first PDF run can take ~1 minute while the `pix2tex` OCR model lazy-loads
-  (used only when extracted text isn't clean enough). Markdown needs no OCR.
+- This standalone build does **not** bundle OCR (`pix2tex`/`torch`). Markdown and
+  clean-text PDFs work; image-based or scanned PDFs are not supported (the OCR
+  fallback is skipped and such equations keep their raw extracted text).
 - If a command prints a friendly Canvas error (bad token, wrong role), surface
   it to the user verbatim — it already explains the fix.

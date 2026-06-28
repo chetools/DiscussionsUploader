@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "canvasapi>=3.6.0",
+#     "pymupdf>=1.27.0",
+#     "python-dotenv>=1.0",
+# ]
+# ///
 """CLI wrapper for the Canvas equation-discussion workflow.
 
 Thin command-line front end over the project's existing modules so Claude (or a
@@ -19,11 +27,11 @@ import json
 import sys
 from pathlib import Path
 
-# The skill lives at <root>/.claude/skills/canvas-equation-discussion/, so the
-# project root (where the importable modules live) is three parents up.
-ROOT = Path(__file__).resolve().parents[3]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+# This skill is self-contained: the modules it imports are vendored alongside
+# this file, so they resolve regardless of the current working directory.
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 
 from canvas_client import (  # noqa: E402
     create_equation_discussion,
