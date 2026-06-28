@@ -54,6 +54,7 @@ from session_code import (  # noqa: E402
     read_file_lines,
     select_numbered_lines,
 )
+from session_figures import discover_session_figures  # noqa: E402
 
 
 def _fail(message: str) -> int:
@@ -392,6 +393,92 @@ def cmd_code_upload(args: argparse.Namespace) -> int:
     return _fail(result.detail)
 
 
+def cmd_figures_list(args: argparse.Namespace) -> int:
+    try:
+        transcript = _resolve_transcript(args)
+    except FileNotFoundError as exc:
+        return _fail(str(exc))
+
+    if not transcript.is_file():
+        return _fail(f"Transcript not found: {transcript}")
+
+    try:
+        files = discover_session_figures(transcript)
+    except Exception as exc:
+        return _fail(f"Could not discover figures: {exc}")
+
+    if not files:
+        print("No image files (figures) were found in this conversation.")
+        return 0
+
+    if args.json:
+        print(json.dumps([{"path": fp.path, "absolute_path": str(fp.absolute_path), "size_bytes": fp.size_bytes} for fp in files], indent=2))
+        return 0
+
+    print(f"Found {len(files)} figure(s) in {transcript.name}:")
+    for fp in files:
+        print(f"  {fp.path} ({fp.size_bytes} bytes)")
+    return 0
+
+
+def cmd_figures_preview(args: argparse.Namespace) -> int:
+    path = Path(args.file)
+    if not path.is_file():
+        return _fail(f"Figure file not found on disk: {path}")
+
+    if args.json:
+        print(json.dumps({"file": path.name, "title": args.title or None, "description": args.description}, indent=2))
+        return 0
+
+    title = (args.title or "").strip() or "(no title)"
+    print(f"Preview: unpublished discussion '{title}' embedding figure {path.name}.")
+    if (args.description or "").strip():
+        print(f"  Description: {args.description.strip()}")
+    print("  HTML embedding tag will use medium size (max-width: 500px).")
+    return 0
+
+
+def cmd_figures_upload(args: argparse.Namespace) -> int:
+    title = (args.title or "").strip()
+    if not title:
+        return _fail("A --title is required to create the discussion.")
+
+    path = Path(args.file)
+    if not path.is_file():
+        return _fail(f"Figure file not found on disk: {path}")
+
+    try:
+        from canvas_client import upload_course_file
+        canvas_url = upload_course_file(args.course_id, str(path), api_key=args.token)
+    except Exception as exc:
+        return _fail(f"Failed to upload figure to Canvas files: {exc}")
+
+    message_html = description_html(args.description)
+    message_html += f'<p><img src="{canvas_url}" alt="{path.name}" style="max-width: 500px; height: auto;"></p>'
+
+    try:
+        result = create_equation_discussion(
+            args.course_id,
+            title,
+            message_html,
+            api_key=args.token,
+        )
+    except Exception as exc:
+        return _fail(friendly_canvas_error(exc))
+
+    if result.success and result.discussion_id and result.course_id:
+        link = discussion_url(result.course_id, result.discussion_id)
+        print(f"Draft created embedding figure {path.name}: {title}")
+        print(f"  Review and publish in Canvas: {link}")
+        return 0
+
+    if result.success:
+        print(result.detail)
+        return 0
+
+    return _fail(result.detail)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="canvas_discussion",
@@ -512,6 +599,47 @@ def build_parser() -> argparse.ArgumentParser:
         "--description", default="", help="Normal-text intro shown above the code."
     )
     p_code_upload.set_defaults(func=cmd_code_upload)
+
+    p_figures_list = sub.add_parser(
+        "figures-list",
+        help="List image files (figures) mentioned in the current conversation.",
+    )
+    p_figures_list.add_argument(
+        "--transcript",
+        default=None,
+        help="Path to a specific .jsonl transcript.",
+    )
+    p_figures_list.add_argument(
+        "--project-dir",
+        default=None,
+        help="Override the Claude Code projects folder.",
+    )
+    p_figures_list.add_argument("--json", action="store_true", help="Emit JSON.")
+    p_figures_list.set_defaults(func=cmd_figures_list)
+
+    p_figures_preview = sub.add_parser(
+        "figures-preview",
+        help="Show preview info for embedding a figure.",
+    )
+    p_figures_preview.add_argument("file", help="Path to an image file on disk.")
+    p_figures_preview.add_argument("--title", default="", help="Discussion title.")
+    p_figures_preview.add_argument(
+        "--description", default="", help="Normal-text intro shown above the figure."
+    )
+    p_figures_preview.add_argument("--json", action="store_true", help="Emit JSON.")
+    p_figures_preview.set_defaults(func=cmd_figures_preview)
+
+    p_figures_upload = sub.add_parser(
+        "figures-upload",
+        help="Upload an image to Canvas files and create a discussion draft.",
+    )
+    p_figures_upload.add_argument("file", help="Path to an image file on disk.")
+    p_figures_upload.add_argument("--course-id", type=int, required=True, help="Target Canvas course id.")
+    p_figures_upload.add_argument("--title", required=True, help="Discussion title.")
+    p_figures_upload.add_argument(
+        "--description", default="", help="Normal-text intro shown above the figure."
+    )
+    p_figures_upload.set_defaults(func=cmd_figures_upload)
 
     return parser
 

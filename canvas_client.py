@@ -153,3 +153,22 @@ def create_equation_discussion(
             detail=friendly_canvas_error(exc),
             course_id=course_id,
         )
+
+
+def upload_course_file(
+    course_id: int,
+    filepath: str,
+    *,
+    api_key: str | None = None,
+) -> str:
+    """Upload a local file to the course's Files area and return its URL."""
+    canvas = _client(api_key)
+    course = canvas.get_course(course_id)
+    try:
+        success, response = course.upload(filepath)
+        if success and "url" in response:
+            return response["url"]
+        else:
+            raise RuntimeError("Canvas did not return a valid URL after upload.")
+    except Exception as exc:
+        raise RuntimeError(friendly_canvas_error(exc)) from exc

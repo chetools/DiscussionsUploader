@@ -1,5 +1,5 @@
 ---
-name: canvas-session-equations-code
+name: canvas-equation-discussion
 description: Turn numbered equations (from a PDF, a Markdown file, or the current Claude Code conversation) OR Python code generated during a session into an unpublished Canvas discussion draft. Use when the user wants to post an equation sheet / derivation, the equations that came up in this chat, or a Python file (whole or selected lines) as a readable numbered-line listing to a Canvas "Discussion" draft, list their Canvas teacher courses, or preview what would upload.
 ---
 
@@ -137,6 +137,27 @@ Notes for the code source:
 - `code-list` flags files that no longer exist on disk; pass an explicit path to
   `code-preview`/`code-upload` (it need not be one from `code-list`).
 - Add `--json` to `code-list` / `code-preview` for machine-readable output.
+
+## Figure source (upload session images)
+
+To post **image files** (figures like `.png`, `.jpg`, `.svg`) discussed or generated during the conversation as an embedded image in a Canvas discussion:
+
+```bash
+# 1. List image files discovered in the current conversation transcript
+uv run "$SKILL" figures-list
+
+# 2. Preview the embedding parameters
+uv run "$SKILL" figures-preview path/to/figure.png --title "Generated Plot"
+
+# 3. Create the unpublished draft with the image embedded (max-width: 500px)
+uv run "$SKILL" figures-upload path/to/figure.png --course-id 12345 \
+    --title "Generated Plot" \
+    --description "Here is the plot we just generated in class."
+```
+
+Notes for the figure source:
+- The image is uploaded to the course's "Files" section in Canvas, and then embedded into the unpublished discussion topic using an `<img>` tag with `max-width: 500px`.
+- `figures-list` works by scanning the active session's transcript for paths ending in image extensions and verifying they exist on disk.
 
 ## Recommended sequence
 
